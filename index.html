@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Запись онлайн</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* ═══════════════════════════════════════
+       RESET & ROOT
+    ═══════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #f9f6f2;
+      --surface:     #ffffff;
+      --surface2:    #f4f0ea;
+      --border:      #e4ddd4;
+      --accent:      #b5714f;
+      --accent-h:    #9a5c3b;
+      --accent-soft: #f5ece6;
+      --text:        #1c1917;
+      --muted:       #8a7e76;
+      --success:     #4a8c6e;
+      --radius:      16px;
+      --shadow:      0 4px 24px rgba(28,25,23,.07);
+      --shadow-lg:   0 12px 48px rgba(28,25,23,.12);
+      --trans:       .35s cubic-bezier(.4,0,.2,1);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Jost', sans-serif;
+      font-weight: 400;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+    a { text-decoration: none; }
+    img { display: block; max-width: 100%; }
+
+    /* ═══════════════════════════════════════
+       STEP SYSTEM
+    ═══════════════════════════════════════ */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    /* Slide transitions */
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(48px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(-48px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .step.entering-forward  { animation: slideInRight .4s ease forwards; }
+    .step.entering-backward { animation: slideInLeft  .4s ease forwards; }
+    .step.entering-fade     { animation: fadeIn       .5s ease forwards; }
+
+    /* ═══════════════════════════════════════
+       BOOKING SHELL (steps 1-4)
+    ═══════════════════════════════════════ */
+    .booking-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top navigation bar */
+    .booking-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(249,246,242,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .nav-brand {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .nav-brand span { color: var(--accent); }
+
+    /* Progress bar */
+    .progress-wrap {
+      flex: 1;
+      max-width: 320px;
+      margin: 0 auto;
+    }
+
+    .progress-steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .prog-item {
+      display: flex;
+      align-items: center;
+      flex: 1;
+    }
+
+    .prog-dot {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: all var(--trans);
+      z-index: 1;
+    }
+
+    .prog-dot.done {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .prog-dot.active {
+      background: var(--surface);
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+    }
+
+    .prog-line {
+      flex: 1;
+      height: 2px;
+      background: var(--border);
+      transition: background var(--trans);
+    }
+
+    .prog-line.done { background: var(--accent); }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 0;
+      transition: color .2s;
+      white-space: nowrap;
+    }
+    .back-btn:hover { color: var(--text); }
+    .back-btn svg { width: 16px; height: 16px; }
+
+    /* ═══════════════════════════════════════
+       STEP CONTENT WRAPPER
+    ═══════════════════════════════════════ */
+    .step-body {
+      flex: 1;
+      padding: 40px 24px 80px;
+      max-width: 760px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .step-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 600;
+      line-height: 1.15;
+      margin-bottom: 8px;
+    }
+
+    .step-title em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .step-subtitle {
+      color: var(--muted);
+      font-size: 15px;
+      margin-bottom: 36px;
+    }
+
+    /* ═══════════════════════════════════════
+       HERO — STEP 0
+    ═══════════════════════════════════════ */
+    #step-0 {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Decorative background blobs */
+    .hero-blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: .55;
+      pointer-events: none;
+    }
+    .hero-blob-1 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, #e8d5c4, #f5c9ac);
+      top: -120px; right: -120px;
+    }
+    .hero-blob-2 {
+      width: 380px; height: 380px;
+      background: radial-gradient(circle, #dde8d5, #c9dab5);
+      bottom: 60px; left: -80px;
+    }
+    .hero-blob-3 {
+      width: 260px; height: 260px;
+      background: radial-gradient(circle, #d5d0e8, #c4c0e0);
+      top: 40%; left: 30%;
+      opacity: .3;
+    }
+
+    /* Noise texture overlay */
+    #step-0::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      opacity: .5;
+    }
+
+    /* Hero navbar */
+    .hero-nav {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 40px;
+    }
+
+    .hero-logo {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .hero-logo span { color: var(--accent); }
+
+    .hero-nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+    .hero-nav-links a {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--muted);
+      transition: color .2s;
+    }
+    .hero-nav-links a:hover { color: var(--text); }
+
+    @media (max-width: 600px) {
+      .hero-nav { padding: 20px 20px; }
+      .hero-nav-links { display: none; }
+    }
+
+    /* Hero main content */
+    .hero-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      position: relative;
+      z-index: 5;
+      padding: 40px 40px 60px;
+    }
+
+    .hero-inner {
+      max-width: 640px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(181,113,79,.2);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 28px;
+      animation: fadeIn .6s ease both;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .hero-headline {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(44px, 8vw, 80px);
+      font-weight: 700;
+      line-height: 1.05;
+      margin-bottom: 24px;
+      animation: fadeIn .6s .1s ease both;
+    }
+
+    .hero-headline em {
+      font-style: italic;
+      color: var(--accent);
+      font-weight: 400;
+    }
+
+    .hero-desc {
+      font-size: clamp(15px, 2vw, 17px);
+      color: var(--muted);
+      font-weight: 300;
+      line-height: 1.7;
+      max-width: 480px;
+      margin-bottom: 40px;
+      animation: fadeIn .6s .2s ease both;
+    }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      animation: fadeIn .6s .3s ease both;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'Jost', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 16px 36px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      transition: background var(--trans), transform .2s, box-shadow .2s;
+      box-shadow: 0 4px 20px rgba(181,113,79,.35);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-h);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(181,113,79,.45);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-primary svg { width: 18px; height: 18px; transition: transform .2s; }
+    .btn-primary:hover svg { transform: translateX(4px); }
+
+    .hero-scroll-hint {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    /* Hero services strip */
+    .hero-services-strip {
+      position: relative;
+      z-index: 5;
+      padding: 0 40px 60px;
+      animation: fadeIn .6s .45s ease both;
+    }
+
+    .hero-strip-label {
+      font-size: 11px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+
+    .hero-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .hero-pill {
+      background: rgba(255,255,255,.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .hero-pill:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    @media (max-width: 600px) {
+      .hero-content, .hero-services-strip { padding-left: 20px; padding-right: 20px; }
+    }
+
+    /* Floating decorative card */
+    .hero-card-float {
+      position: absolute;
+      right: 60px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,.8);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px 32px;
+      box-shadow: var(--shadow-lg);
+      width: 260px;
+      z-index: 5;
+      animation: fadeIn .6s .4s ease both;
+    }
+
+    @media (max-width: 900px) { .hero-card-float { display: none; } }
+
+    .float-card-title {
+      font-size: 12px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+
+    .float-card-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .float-card-row:last-child { border-bottom: none; }
+
+    .float-icon {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: var(--accent-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .float-card-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .float-card-dur {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ═══════════════════════════════════════
+       STEP 1 — SERVICE SELECTION
+    ═══════════════════════════════════════ */
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 16px;
+    }
+
+    .service-card {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      cursor: pointer;
+      transition: all var(--trans);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .service-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--accent-soft), transparent 60%);
+      opacity: 0;
+      transition: opacity var(--trans);
+    }
+
+    .service-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .service-card:hover::before { opacity: 1; }
+
+    .service-card.selected {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .service-card.selected::before { opacity: 1; }
+
+    .svc-icon {
+      width: 48px; height: 48px;
+      border-radius: 14px;
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      transition: background var(--trans);
+      position: relative;
+    }
+
+    .service-card:hover .svc-icon,
+    .service-card.selected .svc-icon {
+      background: rgba(181,113,79,.15);
+    }
+
+    .svc-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+      position: relative;
+    }
+
+    .svc-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .svc-dur {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .svc-price {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .svc-select-dot {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      transition: all var(--trans);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .service-card.selected .svc-select-dot {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .svc-select-dot::after {
+      content: '';
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #fff;
+      opacity: 0;
+      transition: opacity var(--trans);
+    }
+
+    .service-card.selected .svc-select-dot::after { opacity: 1; }
+
+    /* ═══════════════════════════════════════
+       STEP 2 — DATE SELECTION
+    ═══════════════════════════════════════ */
+    .calendar-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      max-width: 420px;
+    }
+
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .cal-month-label {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    .cal-nav-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all .2s;
+      font-size: 16px;
+    }
+
+    .cal-nav-btn:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    .cal-days-header {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .cal-day-name {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      color: var(--muted);
+      text-transform: uppercase;
+      padding: 4px 0;
+    }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+
+    .cal-day {
+      aspect-ratio: 1;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .18s;
+      border: 1px solid transparent;
+      color: var(--text);
+    }
+
+    .cal-day:hover:not(.disabled):not(.empty) {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .cal-day.today {
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .cal-day.selected {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px rgba(181,113,79,.35);
+    }
+
+    .cal-day.disabled {
+      color: var(--border);
+      cursor: not-allowed;
+    }
+
+    .cal-day.empty { cursor: default; }
+
+    /* ═══════════════════════════════════════
+       STEP 3 — TIME SELECTION
+    ═══════════════════════════════════════ */
+    .time-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      max-width: 480px;
+    }
+
+    @media (max-width: 400px) {
+      .time-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .time-slot {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 8px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .time-slot:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .time-slot.selected {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(181,113,79,.35);
+    }
+
+    /* ═══════════════════════════════════════
+       STEP 4 — CONFIRMATION
+    ═══════════════════════════════════════ */
+    .confirm-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 600px) {
+      .confirm-layout { grid-template-columns: 1fr; }
+    }
+
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: var(--shadow);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .summary-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .summary-row:last-child { border-bottom: none; }
+
+    .summary-row-icon {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .summary-row-info { flex: 1; }
+
+    .summary-row-key {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .summary-row-value {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .summary-row-edit {
+      font-size: 12px;
+      color: var(--accent);
+      cursor: pointer;
+      font-weight: 500;
+      transition: color .2s;
+      background: none;
+      border: none;
+    }
+    .summary-row-edit:hover { color: var(--accent-h); }
+
+    /* WhatsApp panel */
+    .wa-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .wa-panel-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .wa-panel-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .wa-preview {
+      background: #e7f9f0;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 14px;
+      color: #1a4731;
+      line-height: 1.6;
+      border-left: 3px solid #25D366;
+    }
+
+    .wa-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #25D366;
+      color: #fff;
+      font-family: 'Jost', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 18px 32px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      transition: background .2s, transform .2s, box-shadow .2s;
+      box-shadow: 0 4px 20px rgba(37,211,102,.3);
+      text-decoration: none;
+    }
+
+    .wa-btn:hover {
+      background: #1fbe5a;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(37,211,102,.4);
+    }
+
+    .wa-btn svg { width: 22px; height: 22px; }
+
+    .restart-link {
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .restart-link button {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    /* ═══════════════════════════════════════
+       CONTINUE BUTTON (steps 1–3)
+    ═══════════════════════════════════════ */
+    .step-footer {
+      margin-top: 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .btn-continue {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'Jost', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 15px 36px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      transition: background var(--trans), opacity .2s, transform .2s;
+      box-shadow: 0 4px 16px rgba(181,113,79,.3);
+    }
+
+    .btn-continue:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn-continue:not(:disabled):hover {
+      background: var(--accent-h);
+      transform: translateY(-2px);
+    }
+
+    .btn-continue svg { width: 16px; height: 16px; }
+
+    .selection-hint {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ═══════════════════════════════════════
+       UTILITIES
+    ═══════════════════════════════════════ */
+    .divider-ornament {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 32px;
+    }
+    .divider-ornament::before,
+    .divider-ornament::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+      max-width: 60px;
+    }
+    .ornament-icon {
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    /* Staggered entrance for cards */
+    .stagger-in > * {
+      opacity: 0;
+      transform: translateY(16px);
+      animation: fadeIn .4s ease forwards;
+    }
+    .stagger-in > *:nth-child(1) { animation-delay: .05s; }
+    .stagger-in > *:nth-child(2) { animation-delay: .10s; }
+    .stagger-in > *:nth-child(3) { animation-delay: .15s; }
+    .stagger-in > *:nth-child(4) { animation-delay: .20s; }
+    .stagger-in > *:nth-child(5) { animation-delay: .25s; }
+    .stagger-in > *:nth-child(6) { animation-delay: .30s; }
+
+    /* ═══════════════════════════════════════
+       SUPABASE NOTICE (optional)
+    ═══════════════════════════════════════ */
+    .supabase-ready-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #eef8f4;
+      border: 1px solid #c3e5d8;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12px;
+      color: var(--success);
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  </style>
+
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════
+       STEP 0 — HERO LANDING
+  ═══════════════════════════════════════ -->
+
+  <section id="step-0" class="step active">
+    <!-- Background blobs -->
+    <div class="hero-blob hero-blob-1"></div>
+    <div class="hero-blob hero-blob-2"></div>
+    <div class="hero-blob hero-blob-3"></div>
+
+```
+<!-- Top nav -->
+<nav class="hero-nav">
+  <div class="hero-logo">Студия <span>Красоты</span></div>
+  <ul class="hero-nav-links">
+    <li><a href="#step-0">Главная</a></li>
+    <li><a href="#" onclick="goToStep(1,'forward');return false;">Услуги</a></li>
+    <li><a href="tel:+79634092908">Контакты</a></li>
+  </ul>
+</nav>
+
+<!-- Main hero content -->
+<div class="hero-content">
+  <div class="hero-inner">
+    <div class="hero-badge">Онлайн-запись открыта</div>
+    <h1 class="hero-headline">
+      Ваша красота —<br>
+      наша <em>страсть</em>
+    </h1>
+    <p class="hero-desc">
+      Профессиональный уход, современные техники и тёплая атмосфера.
+      Запишитесь онлайн за несколько секунд.
+    </p>
+    <div class="hero-actions">
+      <button class="btn-primary" onclick="goToStep(1,'forward')">
+        Записаться сейчас
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </button>
+      <span class="hero-scroll-hint">Без регистрации</span>
+    </div>
+  </div>
+
+  <!-- Floating preview card -->
+  <div class="hero-card-float">
+    <div class="float-card-title">Популярные услуги</div>
+    <div class="float-card-row">
+      <div class="float-icon">💅</div>
+      <div>
+        <div class="float-card-name">Маникюр</div>
+        <div class="float-card-dur">от 60 мин</div>
+      </div>
+    </div>
+    <div class="float-card-row">
+      <div class="float-icon">🧖</div>
+      <div>
+        <div class="float-card-name">Массаж</div>
+        <div class="float-card-dur">от 60 мин</div>
+      </div>
+    </div>
+    <div class="float-card-row">
+      <div class="float-icon">✨</div>
+      <div>
+        <div class="float-card-name">Уход за лицом</div>
+        <div class="float-card-dur">от 60 мин</div>
+      </div>
+    </div>
+    <div class="float-card-row">
+      <div class="float-icon">💇</div>
+      <div>
+        <div class="float-card-name">Стрижка</div>
+        <div class="float-card-dur">от 45 мин</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Services pills strip -->
+<div class="hero-services-strip">
+  <div class="hero-strip-label">Все услуги</div>
+  <div class="hero-pills">
+    <span class="hero-pill" onclick="quickPickService('Маникюр')">💅 Маникюр</span>
+    <span class="hero-pill" onclick="quickPickService('Педикюр')">🦶 Педикюр</span>
+    <span class="hero-pill" onclick="quickPickService('Массаж')">🧖 Массаж</span>
+    <span class="hero-pill" onclick="quickPickService('Уход за лицом')">✨ Уход за лицом</span>
+    <span class="hero-pill" onclick="quickPickService('Наращивание ресниц')">👁 Ресницы</span>
+    <span class="hero-pill" onclick="quickPickService('Стрижка и укладка')">💇 Стрижка</span>
+  </div>
+</div>
+```
+
+  </section>
+
+  <!-- ═══════════════════════════════════════
+       STEPS 1–4 SHELL
+  ═══════════════════════════════════════ -->
+
+  <section id="step-1" class="step">
+    <div class="booking-shell">
+      <nav class="booking-nav">
+        <button class="back-btn" onclick="goBack()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Назад
+        </button>
+        <div class="progress-wrap">
+          <div class="progress-steps">
+            <div class="prog-item">
+              <div class="prog-dot active" id="pdot-1">1</div>
+              <div class="prog-line" id="pline-1"></div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-dot" id="pdot-2">2</div>
+              <div class="prog-line" id="pline-2"></div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-dot" id="pdot-3">3</div>
+              <div class="prog-line" id="pline-3"></div>
+            </div>
+            <div class="prog-item" style="flex:0">
+              <div class="prog-dot" id="pdot-4">4</div>
+            </div>
+          </div>
+        </div>
+        <div class="nav-brand">Студия <span>Красоты</span></div>
+      </nav>
+
+```
+  <div class="step-body">
+    <p class="step-subtitle">Шаг 1 из 4</p>
+    <h2 class="step-title">Выберите <em>услугу</em></h2>
+    <div class="services-grid stagger-in" id="services-grid">
+      <!-- rendered by JS -->
+    </div>
+    <div class="step-footer">
+      <button class="btn-continue" id="btn-next-1" disabled onclick="goToStep(2,'forward')">
+        Выбрать дату
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </button>
+      <span class="selection-hint" id="hint-1">Выберите услугу</span>
+    </div>
+  </div>
+</div>
+```
+
+  </section>
+
+  <section id="step-2" class="step">
+    <div class="booking-shell">
+      <nav class="booking-nav">
+        <button class="back-btn" onclick="goBack()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Назад
+        </button>
+        <div class="progress-wrap">
+          <div class="progress-steps">
+            <div class="prog-item">
+              <div class="prog-dot done">✓</div>
+              <div class="prog-line done"></div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-dot active">2</div>
+              <div class="prog-line" id="pline-2b"></div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-dot">3</div>
+              <div class="prog-line"></div>
+            </div>
+            <div class="prog-item" style="flex:0">
+              <div class="prog-dot">4</div>
+            </div>
+          </div>
+        </div>
+        <div class="nav-brand">Студия <span>Красоты</span></div>
+      </nav>
+
+```
+  <div class="step-body">
+    <p class="step-subtitle">Шаг 2 из 4</p>
+    <h2 class="step-title">Выберите <em>дату</em></h2>
+
+    <div class="calendar-wrap">
+      <div class="cal-header">
+        <button class="cal-nav-btn" id="cal-prev" onclick="calNav(-1)">&#8592;</button>
+        <div class="cal-month-label" id="cal-month-label">—</div>
+        <button class="cal-nav-btn" id="cal-next" onclick="calNav(+1)">&#8594;</button>
+      </div>
+      <div class="cal-days-header">
+        <div class="cal-day-name">Пн</div>
+        <div class="cal-day-name">Вт</div>
+        <div class="cal-day-name">Ср</div>
+        <div class="cal-day-name">Чт</div>
+        <div class="cal-day-name">Пт</div>
+        <div class="cal-day-name">Сб</div>
+        <div class="cal-day-name">Вс</div>
+      </div>
+      <div class="cal-grid" id="cal-grid"><!-- rendered by JS --></div>
+    </div>
+
+    <div class="step-footer">
+      <button class="btn-continue" id="btn-next-2" disabled onclick="goToStep(3,'forward')">
+        Выбрать время
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </button>
+      <span class="selection-hint" id="hint-2">Выберите дату</span>
+    </div>
+  </div>
+</div>
+```
+
+  </section>
+
+  <section id="step-3" class="step">
+    <div class="booking-shell">
+      <nav class="booking-nav">
+        <button class="back-btn" onclick="goBack()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Назад
+        </button>
+        <div class="progress-wrap">
+          <div class="progress-steps">
+            <div class="prog-item">
+              <div class="prog-dot done">✓</div>
+              <div class="prog-line done"></div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-dot done">✓</div>
+              <div class="prog-line done"></div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-dot active">3</div>
+              <div class="prog-line"></div>
+            </div>
+            <div class="prog-item" style="flex:0">
+              <div class="prog-dot">4</div>
+            </div>
+          </div>
+        </div>
+        <div class="nav-brand">Студия <span>Красоты</span></div>
+      </nav>
+
+```
+  <div class="step-body">
+    <p class="step-subtitle">Шаг 3 из 4</p>
+    <h2 class="step-title">Выберите <em>время</em></h2>
+    <p id="step3-date-label" style="font-size:15px;color:var(--muted);margin-bottom:24px;"></p>
+
+    <div class="time-grid stagger-in" id="time-grid"><!-- rendered by JS --></div>
+
+    <div class="step-footer">
+      <button class="btn-continue" id="btn-next-3" disabled onclick="goToStep(4,'forward')">
+        Подтвердить
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </button>
+      <span class="selection-hint" id="hint-3">Выберите время</span>
+    </div>
+  </div>
+</div>
+```
+
+  </section>
+
+  <section id="step-4" class="step">
+    <div class="booking-shell">
+      <nav class="booking-nav">
+        <button class="back-btn" onclick="goBack()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Изменить
+        </button>
+        <div class="progress-wrap">
+          <div class="progress-steps">
+            <div class="prog-item">
+              <div class="prog-dot done">✓</div>
+              <div class="prog-line done"></div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-dot done">✓</div>
+              <div class="prog-line done"></div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-dot done">✓</div>
+              <div class="prog-line done"></div>
+            </div>
+            <div class="prog-item" style="flex:0">
+              <div class="prog-dot active">4</div>
+            </div>
+          </div>
+        </div>
+        <div class="nav-brand">Студия <span>Красоты</span></div>
+      </nav>
+
+```
+  <div class="step-body">
+    <p class="step-subtitle">Шаг 4 из 4</p>
+    <h2 class="step-title">Всё <em>готово!</em></h2>
+
+    <div class="confirm-layout">
+      <!-- Summary -->
+      <div class="summary-card">
+        <div class="summary-label">Ваша запись</div>
+
+        <div class="summary-row">
+          <div class="summary-row-icon">💅</div>
+          <div class="summary-row-info">
+            <div class="summary-row-key">Услуга</div>
+            <div class="summary-row-value" id="sum-service">—</div>
+          </div>
+          <button class="summary-row-edit" onclick="goToStep(1,'backward')">Изменить</button>
+        </div>
+
+        <div class="summary-row">
+          <div class="summary-row-icon">📅</div>
+          <div class="summary-row-info">
+            <div class="summary-row-key">Дата</div>
+            <div class="summary-row-value" id="sum-date">—</div>
+          </div>
+          <button class="summary-row-edit" onclick="goToStep(2,'backward')">Изменить</button>
+        </div>
+
+        <div class="summary-row">
+          <div class="summary-row-icon">🕐</div>
+          <div class="summary-row-info">
+            <div class="summary-row-key">Время</div>
+            <div class="summary-row-value" id="sum-time">—</div>
+          </div>
+          <button class="summary-row-edit" onclick="goToStep(3,'backward')">Изменить</button>
+        </div>
+      </div>
+
+      <!-- WhatsApp panel -->
+      <div class="wa-panel">
+        <div class="wa-panel-title">Подтвердите запись через WhatsApp</div>
+        <p class="wa-panel-desc">
+          Нажмите кнопку — откроется WhatsApp с готовым сообщением. Просто отправьте его мастеру.
+        </p>
+        <div class="wa-preview" id="wa-preview-text">—</div>
+        <a id="wa-link" href="#" target="_blank" rel="noopener" class="wa-btn" onclick="handleWA(event)">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+          </svg>
+          Записаться в WhatsApp
+        </a>
+        <div class="restart-link">
+          <button onclick="restartBooking()">Начать заново</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+  </section>
+
+  <!-- ═══════════════════════════════════════
+       JAVASCRIPT
+  ═══════════════════════════════════════ -->
+
+  <script>
+    // ─────────────────────────────────────────
+    // CONFIG
+    // ─────────────────────────────────────────
+    const WA_NUMBER = '79634092908';
+
+    // ── Services data ──
+    // 💡 Supabase: replace with a fetch from your 'services' table
+    const SERVICES = [
+      { id: 1, name: 'Маникюр',              icon: '💅', duration: '60 мин',  price: 'от 1 200 ₽' },
+      { id: 2, name: 'Педикюр',              icon: '🦶', duration: '75 мин',  price: 'от 1 400 ₽' },
+      { id: 3, name: 'Массаж',               icon: '🧖', duration: '60 мин',  price: 'от 2 500 ₽' },
+      { id: 4, name: 'Уход за лицом',        icon: '✨', duration: '60 мин',  price: 'от 2 000 ₽' },
+      { id: 5, name: 'Наращивание ресниц',   icon: '👁', duration: '120 мин', price: 'от 3 000 ₽' },
+      { id: 6, name: 'Стрижка и укладка',    icon: '💇', duration: '45 мин',  price: 'от 900 ₽'  },
+    ];
+
+    // ── Time slots ──
+    const TIME_SLOTS = [];
+    for (let h = 9; h <= 22; h++) {
+      TIME_SLOTS.push(`${String(h).padStart(2,'0')}:00`);
+    }
+
+    // ─────────────────────────────────────────
+    // STATE
+    // ─────────────────────────────────────────
+    const state = {
+      currentStep: 0,
+      service: null,
+      date: null,        // JS Date object
+      time: null,
+      calMonth: new Date().getMonth(),
+      calYear: new Date().getFullYear(),
+    };
+
+    const MONTH_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                      'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+    const DAY_RU = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+
+    const DAY_SHORT = ['вс','пн','вт','ср','чт','пт','сб'];
+
+    // ─────────────────────────────────────────
+    // NAVIGATION
+    // ─────────────────────────────────────────
+    function goToStep(target, direction) {
+      const current = document.getElementById('step-' + state.currentStep);
+      const next    = document.getElementById('step-' + target);
+      if (!next) return;
+
+      current.classList.remove('active');
+
+      const animClass = direction === 'backward' ? 'entering-backward' : 'entering-forward';
+      next.classList.add('active', animClass);
+
+      // Remove animation class after it plays
+      next.addEventListener('animationend', () => next.classList.remove(animClass), { once: true });
+
+      state.currentStep = target;
+
+      if (target === 2) renderCalendar();
+      if (target === 3) renderTimes();
+      if (target === 4) renderConfirm();
+    }
+
+    function goBack() {
+      if (state.currentStep <= 1) {
+        goToStep(0, 'backward');
+      } else {
+        goToStep(state.currentStep - 1, 'backward');
+      }
+    }
+
+    // ─────────────────────────────────────────
+    // STEP 1 — SERVICES
+    // ─────────────────────────────────────────
+    function renderServices() {
+      const grid = document.getElementById('services-grid');
+      grid.innerHTML = '';
+
+      SERVICES.forEach(svc => {
+        const card = document.createElement('div');
+        card.className = 'service-card' + (state.service?.id === svc.id ? ' selected' : '');
+        card.innerHTML = `
+          <div class="svc-select-dot"></div>
+          <div class="svc-icon">${svc.icon}</div>
+          <div class="svc-name">${svc.name}</div>
+          <div class="svc-meta">
+            <span class="svc-dur">⏱ ${svc.duration}</span>
+            <span class="svc-price">${svc.price}</span>
+          </div>
+        `;
+        card.addEventListener('click', () => selectService(svc));
+        grid.appendChild(card);
+      });
+    }
+
+    function selectService(svc) {
+      state.service = svc;
+      renderServices();
+      document.getElementById('btn-next-1').disabled = false;
+      document.getElementById('hint-1').textContent = `Выбрано: ${svc.name}`;
+    }
+
+    // Quick-pick from hero pills
+    function quickPickService(name) {
+      const svc = SERVICES.find(s => s.name === name);
+      if (svc) {
+        state.service = svc;
+        goToStep(1, 'forward');
+        setTimeout(() => {
+          renderServices();
+          document.getElementById('btn-next-1').disabled = false;
+          document.getElementById('hint-1').textContent = `Выбрано: ${svc.name}`;
+        }, 50);
+      }
+    }
+
+    // ─────────────────────────────────────────
+    // STEP 2 — CALENDAR
+    // ─────────────────────────────────────────
+    function renderCalendar() {
+      const year  = state.calYear;
+      const month = state.calMonth;
+
+      document.getElementById('cal-month-label').textContent =
+        MONTH_RU[month] + ' ' + year;
+
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      // First day of month (0=Sun…6=Sat), convert to Mon-based (0=Mon…6=Sun)
+      let firstDay = new Date(year, month, 1).getDay();
+      firstDay = (firstDay === 0) ? 6 : firstDay - 1; // shift to Mon
+
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      const grid = document.getElementById('cal-grid');
+      grid.innerHTML = '';
+
+      // Empty cells before first day
+      for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'cal-day empty';
+        grid.appendChild(empty);
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        date.setHours(0,0,0,0);
+
+        const dayEl = document.createElement('div');
+        dayEl.textContent = d;
+        dayEl.className = 'cal-day';
+
+        const isPast = date < today;
+        const isToday = date.getTime() === today.getTime();
+        const isSelected = state.date && state.date.getTime() === date.getTime();
+
+        if (isPast)       dayEl.classList.add('disabled');
+        else if (isSelected) dayEl.classList.add('selected');
+        else if (isToday)  dayEl.classList.add('today');
+
+        if (!isPast) {
+          dayEl.addEventListener('click', () => selectDate(new Date(year, month, d)));
+        }
+
+        grid.appendChild(dayEl);
+      }
+
+      // Prev button disabled if in current month
+      const prevBtn = document.getElementById('cal-prev');
+      const nowM = new Date();
+      prevBtn.disabled = (year === nowM.getFullYear() && month === nowM.getMonth());
+      prevBtn.style.opacity = prevBtn.disabled ? '.35' : '1';
+      prevBtn.style.cursor  = prevBtn.disabled ? 'not-allowed' : 'pointer';
+    }
+
+    function selectDate(date) {
+      state.date = date;
+      renderCalendar();
+      document.getElementById('btn-next-2').disabled = false;
+
+      const d = date;
+      const formatted = `${d.getDate()} ${MONTH_RU[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;
+      document.getElementById('hint-2').textContent = 'Выбрано: ' + formatted;
+    }
+
+    function calNav(dir) {
+      state.calMonth += dir;
+      if (state.calMonth > 11) { state.calMonth = 0; state.calYear++; }
+      if (state.calMonth < 0)  { state.calMonth = 11; state.calYear--; }
+      renderCalendar();
+    }
+
+    // ─────────────────────────────────────────
+    // STEP 3 — TIME
+    // ─────────────────────────────────────────
+    function renderTimes() {
+      if (state.date) {
+        const d = state.date;
+        const formatted = `${d.getDate()} ${MONTH_RU[d.getMonth()].toLowerCase()} — ${DAY_RU[d.getDay()]}`;
+        document.getElementById('step3-date-label').textContent = '📅 ' + formatted;
+      }
+
+      const grid = document.getElementById('time-grid');
+      grid.innerHTML = '';
+
+      TIME_SLOTS.forEach(t => {
+        const slot = document.createElement('div');
+        slot.className = 'time-slot' + (state.time === t ? ' selected' : '');
+        slot.textContent = t;
+        slot.addEventListener('click', () => selectTime(t));
+        grid.appendChild(slot);
+      });
+    }
+
+    function selectTime(t) {
+      state.time = t;
+      document.querySelectorAll('.time-slot').forEach(el => {
+        el.classList.toggle('selected', el.textContent === t);
+      });
+      document.getElementById('btn-next-3').disabled = false;
+      document.getElementById('hint-3').textContent = 'Выбрано: ' + t;
+    }
+
+    // ─────────────────────────────────────────
+    // STEP 4 — CONFIRM
+    // ─────────────────────────────────────────
+    function renderConfirm() {
+      const svc = state.service;
+      const d   = state.date;
+      const t   = state.time;
+
+      // Format date nicely
+      const dateStr = d
+        ? `${d.getDate()} ${MONTH_RU[d.getMonth()]} ${d.getFullYear()}`
+        : '—';
+
+      document.getElementById('sum-service').textContent = svc?.name || '—';
+      document.getElementById('sum-date').textContent    = dateStr;
+      document.getElementById('sum-time').textContent    = t || '—';
+
+      const msg = `Здравствуйте! Я хочу записаться на услугу: ${svc?.name} на дату: ${dateStr} на время: ${t}`;
+
+      document.getElementById('wa-preview-text').textContent = msg;
+
+      const encoded = encodeURIComponent(msg);
+      document.getElementById('wa-link').href =
+        `https://wa.me/${WA_NUMBER}?text=${encoded}`;
+    }
+
+    function handleWA(e) {
+      // Allow default href to open WhatsApp
+      // Optionally add analytics here
+    }
+
+    function restartBooking() {
+      state.service = null;
+      state.date    = null;
+      state.time    = null;
+      goToStep(0, 'backward');
+    }
+
+    // ─────────────────────────────────────────
+    // INIT
+    // ─────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      renderServices();
+      renderCalendar();
+    });
+
+    // ─────────────────────────────────────────
+    // SUPABASE
+    // ─────────────────────────────────────────
+    const supabaseUrl = "https://zcsjsnrqlwbsrwfjeezd.supabase.co/rest/v1/";
+    const supabaseKey = "sb_publishable_OC_LXKou_nH018JzU2B74A_VCzyoXeJ";
+
+    const sb = supabase.createClient(supabaseUrl, supabaseKey);
+  </script>
+
+</body>
+</html>
